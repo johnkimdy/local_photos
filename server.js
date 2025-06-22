@@ -139,6 +139,50 @@ function getMediaFilesInDirectory(dir, recursive = false, limit = 100) {
   return mediaFiles;
 }
 
+
+
+// Root route - server status page
+app.get('/', (req, res) => {
+  res.json({
+    status: 'Photo Gallery Server Running',
+    message: 'Local Photo Gallery API Server',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      directories: '/api/directories',
+      photos: '/api/photos',
+      stats: '/api/stats',
+      info: '/api/info'
+    },
+    version: '1.0.0'
+  });
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API root endpoint
+app.get('/api', (req, res) => {
+  res.json({
+    message: 'Photo Gallery API',
+    version: '1.0.0',
+    endpoints: [
+      'GET /api/directories - Get root directories',
+      'GET /api/directories/:path - Get subdirectories', 
+      'GET /api/photos/:directory - Get photos from directory',
+      'GET /api/stats - Get directory statistics',
+      'GET /api/photo/:filepath - Get individual photo',
+      'GET /api/thumbnail/:filepath - Get photo thumbnail'
+    ]
+  });
+});
+
 // Get root directory structure (fast)
 app.get('/api/directories', (req, res) => {
   try {
@@ -351,4 +395,18 @@ app.listen(PORT, () => {
   console.log(`- Non-recursive scanning by default`);
   console.log(`- Directory preview with media counts`);
   console.log(`- Limited initial load for better performance`);
+});
+
+const HOST = '0.0.0.0'; // This allows external connections
+
+// Update your app.listen() call:
+app.listen(PORT, HOST, () => {
+  console.log(`\n=== Photo Server Started ===`);
+  console.log(`Local access: http://localhost:${PORT}`);
+  console.log(`Network access: http://172.30.1.55:${PORT}`);
+  console.log(`🌐 Global access: http://local-photos.ddns.net:${PORT}`);
+  console.log(`📱 Mobile access: http://local-photos.ddns.net:${PORT}`);
+  console.log(`\nServer is now accessible from anywhere!`);
+  console.log(`Keep this terminal open to maintain access.`);
+  console.log(`=====================================\n`);
 });

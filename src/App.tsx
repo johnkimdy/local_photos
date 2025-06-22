@@ -32,67 +32,27 @@ interface DirectoryInfo {
   lastModified: string;
 }
 
-// Check if we're running on GitHub Pages or locally
-const isGitHubPages = window.location.hostname.includes('github.io');
-const SERVER_URL = isGitHubPages ? '' : 'http://localhost:3001';
-
-// Demo data for GitHub Pages
-const demoPhotos: Photo[] = [
-  {
-    id: 1,
-    name: 'demo-landscape.jpg',
-    url: 'https://picsum.photos/1920/1080?random=1',
-    thumbnail: 'https://picsum.photos/300/300?random=1',
-    size: 2048000,
-    modified: new Date().toISOString(),
-    directory: 'Landscapes',
-    type: 'image'
-  },
-  {
-    id: 2,
-    name: 'demo-portrait.jpg',
-    url: 'https://picsum.photos/1080/1920?random=2',
-    thumbnail: 'https://picsum.photos/300/300?random=2',
-    size: 1536000,
-    modified: new Date(Date.now() - 86400000).toISOString(),
-    directory: 'Portraits',
-    type: 'image'
-  },
-  {
-    id: 3,
-    name: 'demo-nature.jpg',
-    url: 'https://picsum.photos/1920/1080?random=3',
-    thumbnail: 'https://picsum.photos/300/300?random=3',
-    size: 3072000,
-    modified: new Date(Date.now() - 172800000).toISOString(),
-    directory: 'Nature',
-    type: 'image'
+// Smart server URL detection
+const getServerUrl = () => {
+  const hostname = window.location.hostname;
+  
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    // Local development - use local server
+    return 'http://localhost:3001';
+  } else if (hostname.includes('github.io') || hostname.includes('netlify.app')) {
+    // Deployed version - use your DDNS address
+    return 'http://local-photos.ddns.net:3001';
+  } else {
+    // Fallback for other cases
+    return 'http://local-photos.ddns.net:3001';
   }
-];
+};
 
-const demoDirectories: Directory[] = [
-  {
-    name: 'Landscapes',
-    path: 'Landscapes',
-    mediaCount: 45,
-    subdirectoryCount: 3,
-    lastModified: new Date().toISOString()
-  },
-  {
-    name: 'Portraits',
-    path: 'Portraits',
-    mediaCount: 23,
-    subdirectoryCount: 1,
-    lastModified: new Date(Date.now() - 86400000).toISOString()
-  },
-  {
-    name: 'Nature',
-    path: 'Nature',
-    mediaCount: 67,
-    subdirectoryCount: 5,
-    lastModified: new Date(Date.now() - 172800000).toISOString()
-  }
-];
+const SERVER_URL = getServerUrl();
+
+// Check if we're using the local or remote server
+const isLocalServer = SERVER_URL.includes('localhost');
+const isRemoteServer = SERVER_URL.includes('ddns.net');
 
 function App() {
   const [mode, setMode] = useState<'directories' | 'photos'>('directories');
@@ -107,6 +67,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [directoryInfo, setDirectoryInfo] = useState<DirectoryInfo | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
   // Pagination state
   const [hasMore, setHasMore] = useState(false);
@@ -114,23 +75,33 @@ function App() {
   const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
-    if (isGitHubPages) {
-      // Use demo data for GitHub Pages
-      setTimeout(() => {
-        setDirectories(demoDirectories);
-        setDirectoryInfo({
-          directory: 'Demo Gallery',
-          totalFiles: 135,
-          imageFiles: 135,
-          lastModified: new Date().toISOString()
-        });
-        setLoading(false);
-      }, 1000);
-    } else {
-      loadDirectories('');
-      loadStats();
-    }
+    console.log('App starting with SERVER_URL:', SERVER_URL);
+    checkServerStatus();
+    loadDirectories('');
+    loadStats();
   }, []);
+
+  const checkServerStatus = async () => {
+    try {
+      setServerStatus('checking');
+      const response = await fetch(`${SERVER_URL}/health`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        setServerStatus('online');
+        console.log('Server is online');
+      } else {
+        setServerStatus('offline');
+      }
+    } catch (err) {
+      console.error('Server check failed:', err);
+      setServerStatus('offline');
+    }
+  };
 
   const loadDirectories = async (path: string = '') => {
     try {
@@ -141,18 +112,28 @@ function App() {
         ? `${SERVER_URL}/api/directories/${encodeURIComponent(path)}`
         : `${SERVER_URL}/api/directories`;
       
-      const response = await fetch(url);
+      console.log('Fetching from URL:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      
       if (!response.ok) {
-        throw new Error('Failed to load directories');
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
+      console.log('Response data:', data);
+      
       setDirectories(data.directories || []);
       setCurrentPath(path);
       setMode('directories');
     } catch (err) {
-      setError('Unable to connect to photo server. Make sure the server is running on port 3001.');
       console.error('Error loading directories:', err);
+      setError(`Unable to connect to your photo server: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -165,7 +146,13 @@ function App() {
       
       const offset = (page - 1) * limit;
       const response = await fetch(
-        `${SERVER_URL}/api/photos/${encodeURIComponent(directoryPath)}?limit=${limit}&offset=${offset}`
+        `${SERVER_URL}/api/photos/${encodeURIComponent(directoryPath)}?limit=${limit}&offset=${offset}`,
+        {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+        }
       );
       
       if (!response.ok) {
@@ -195,13 +182,17 @@ function App() {
 
   const loadStats = async () => {
     try {
-      const response = await fetch(`${SERVER_URL}/api/stats`);
+      const response = await fetch(`${SERVER_URL}/api/stats`, {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
       if (response.ok) {
         const info = await response.json();
         setDirectoryInfo({
           directory: info.directory,
-          totalFiles: info.estimatedMediaFiles,
-          imageFiles: info.estimatedMediaFiles,
+          totalFiles: info.estimatedMediaFiles || 0,
+          imageFiles: info.estimatedMediaFiles || 0,
           lastModified: info.lastModified
         });
       }
@@ -211,17 +202,14 @@ function App() {
   };
 
   const handleDirectoryClick = (directoryPath: string) => {
-    // Check if directory has media files
     const directory = directories.find(d => d.path === directoryPath);
     
     if (directory && directory.mediaCount > 0) {
-      // Show choice: view photos or browse subdirectories
       const choice = window.confirm(
         `This directory contains ${directory.mediaCount} photos and ${directory.subdirectoryCount} subdirectories.\n\nClick OK to view photos, or Cancel to browse subdirectories.`
       );
       
       if (choice) {
-        // Add current path to history
         setPathHistory(prev => [...prev, currentPath]);
         loadPhotos(directoryPath);
       } else if (directory.subdirectoryCount > 0) {
@@ -229,11 +217,9 @@ function App() {
         loadDirectories(directoryPath);
       }
     } else if (directory && directory.subdirectoryCount > 0) {
-      // Only subdirectories, navigate there
       setPathHistory(prev => [...prev, currentPath]);
       loadDirectories(directoryPath);
     } else {
-      // No media or subdirectories
       alert('This directory appears to be empty or inaccessible.');
     }
   };
@@ -244,14 +230,11 @@ function App() {
       setPathHistory(prev => prev.slice(0, -1));
       
       if (mode === 'photos') {
-        // Go back to directory view
         loadDirectories(previousPath);
       } else {
-        // Go back to parent directory
         loadDirectories(previousPath);
       }
     } else {
-      // Go to root
       loadDirectories('');
     }
   };
@@ -262,7 +245,6 @@ function App() {
     }
   };
 
-  // Filter photos based on search
   const filteredPhotos = photos.filter(photo =>
     photo.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -286,6 +268,7 @@ function App() {
   };
 
   const handleRefresh = () => {
+    checkServerStatus();
     if (mode === 'directories') {
       loadDirectories(currentPath);
     } else {
@@ -317,44 +300,66 @@ function App() {
           currentMode={mode}
           currentPath={currentPath}
           onClose={() => setSidebarOpen(false)}
-          isDemo={isGitHubPages}
+          isDemo={false}
         />
 
         <main className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
           <div className="p-6">
-            {isGitHubPages && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <div className="flex items-center">
-                  <Info className="h-5 w-5 text-blue-500 mr-2" />
-                  <h3 className="text-blue-800 font-medium">Demo Mode</h3>
+            {/* Server Status Banner */}
+            <div className={`rounded-lg p-4 mb-6 ${
+              serverStatus === 'online' 
+                ? 'bg-green-50 border border-green-200' 
+                : serverStatus === 'offline'
+                ? 'bg-red-50 border border-red-200'
+                : 'bg-yellow-50 border border-yellow-200'
+            }`}>
+              <div className="flex items-center">
+                <div className={`w-3 h-3 rounded-full mr-3 ${
+                  serverStatus === 'online' ? 'bg-green-500' :
+                  serverStatus === 'offline' ? 'bg-red-500' : 'bg-yellow-500'
+                }`}></div>
+                <div>
+                  <h3 className={`font-medium ${
+                    serverStatus === 'online' ? 'text-green-800' :
+                    serverStatus === 'offline' ? 'text-red-800' : 'text-yellow-800'
+                  }`}>
+                    {serverStatus === 'online' && 'Connected to your photo server'}
+                    {serverStatus === 'offline' && 'Cannot connect to your photo server'}
+                    {serverStatus === 'checking' && 'Checking server connection...'}
+                  </h3>
+                  <p className={`text-sm ${
+                    serverStatus === 'online' ? 'text-green-700' :
+                    serverStatus === 'offline' ? 'text-red-700' : 'text-yellow-700'
+                  }`}>
+                    {isLocalServer && 'Using local server'}
+                    {isRemoteServer && `Connected to: ${SERVER_URL}`}
+                    {serverStatus === 'offline' && ' - Make sure your computer is on and server is running'}
+                  </p>
                 </div>
-                <p className="text-blue-700 mt-2">
-                  This is a demo version with sample data. To use your local photos, 
-                  download the project and run it locally with your Node.js server.
-                </p>
               </div>
-            )}
+            </div>
 
-            {error && !isGitHubPages && (
+            {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
                 <div className="flex items-center">
                   <Info className="h-5 w-5 text-red-500 mr-2" />
-                  <h3 className="text-red-800 font-medium">Server Connection Error</h3>
+                  <h3 className="text-red-800 font-medium">Connection Error</h3>
                 </div>
                 <p className="text-red-700 mt-2">{error}</p>
+                
                 <div className="mt-4 p-4 bg-red-100 rounded border text-sm text-red-800">
-                  <p className="font-medium">To set up the photo server:</p>
+                  <p className="font-medium">Troubleshooting:</p>
                   <ol className="list-decimal list-inside mt-2 space-y-1">
-                    <li>Open a terminal in this project directory</li>
-                    <li>Run: <code className="bg-red-200 px-1 rounded">node server.js</code></li>
-                    <li>The server will start on http://localhost:3001</li>
-                    <li>Refresh this page</li>
+                    <li>Make sure your computer is on and connected to the internet</li>
+                    <li>Ensure the photo server is running: <code className="bg-red-200 px-1 rounded">node server.js</code></li>
+                    <li>Check your router's port forwarding for port 3001</li>
+                    <li>Verify your DDNS is updating correctly</li>
+                    <li>Server URL: <code className="bg-red-200 px-1 rounded">{SERVER_URL}</code></li>
                   </ol>
                 </div>
               </div>
             )}
 
-            {/* Mode indicator and navigation */}
             {!loading && !error && (
               <div className="mb-6">
                 <div className="flex items-center justify-between">
@@ -425,6 +430,13 @@ function App() {
                   </>
                 )}
               </>
+            )}
+
+            {loading && (
+              <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <span className="ml-3 text-gray-600">Loading...</span>
+              </div>
             )}
           </div>
         </main>
