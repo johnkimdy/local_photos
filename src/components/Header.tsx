@@ -9,6 +9,7 @@ interface HeaderProps {
   onViewModeChange: (mode: 'grid' | 'list') => void;
   onScreenCast: () => void;
   onRefresh: () => void;
+  showViewToggle?: boolean;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -18,7 +19,8 @@ const Header: React.FC<HeaderProps> = ({
   viewMode,
   onViewModeChange,
   onScreenCast,
-  onRefresh
+  onRefresh,
+  showViewToggle = true
 }) => {
   return (
     <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
@@ -60,33 +62,35 @@ const Header: React.FC<HeaderProps> = ({
 
           {/* Right section */}
           <div className="flex items-center space-x-2">
-            <div className="flex items-center bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => onViewModeChange('grid')}
-                className={`p-2 rounded transition-colors ${
-                  viewMode === 'grid' 
-                    ? 'bg-white text-blue-600 shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Grid className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => onViewModeChange('list')}
-                className={`p-2 rounded transition-colors ${
-                  viewMode === 'list' 
-                    ? 'bg-white text-blue-600 shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <List className="h-4 w-4" />
-              </button>
-            </div>
+            {showViewToggle && (
+              <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => onViewModeChange('grid')}
+                  className={`p-2 rounded transition-colors ${
+                    viewMode === 'grid' 
+                      ? 'bg-white text-blue-600 shadow-sm' 
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <Grid className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => onViewModeChange('list')}
+                  className={`p-2 rounded transition-colors ${
+                    viewMode === 'list' 
+                      ? 'bg-white text-blue-600 shadow-sm' 
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <List className="h-4 w-4" />
+                </button>
+              </div>
+            )}
 
             <button
               onClick={onRefresh}
               className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Refresh photos"
+              title="Refresh"
             >
               <RefreshCw className="h-5 w-5" />
             </button>
