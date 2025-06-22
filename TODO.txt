@@ -1,0 +1,4 @@
+TODO:
+- Resolve Claude Code/WSL integration issues
+- Fix DDNS connection to port 3001
+- Troubleshoot Chromecast functionality
